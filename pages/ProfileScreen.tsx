@@ -1,14 +1,19 @@
 import React, { useCallback, useState, useEffect } from 'react';
 import { Image, StyleSheet, TouchableOpacity, SafeAreaView, View, Text } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../domain/models/pages';
+import { RootStackParamList, ModalState, ScreenList } from '../domain/models/pages';
 import { Feather } from '@expo/vector-icons';
 import { User, List } from "../domain/models/api";
-import { ScreenList } from "../domain/models/pages";
+import BaseModal from "./Modal";
 import axios from 'axios';
 
 type ProfileScreenProps = NativeStackScreenProps<RootStackParamList, 'Perfil'>;
 const baseUrl = 'https://api.github.com/users/';
+const initModelState = {
+    message: '',
+    modalIsOpen: false,
+    closeAndBack: false
+};
 
 const ProfileScreen: React.FC<ProfileScreenProps> = (props) => {
     const [form, setForm] = useState<User>({
@@ -16,9 +21,16 @@ const ProfileScreen: React.FC<ProfileScreenProps> = (props) => {
         login: '',
         avatar_url: ''
     });
+    const [modalState, setModalState] = useState<ModalState>(initModelState);
 
+    const handlerModal = () => {
+        const isCloseAndBack = modalState.closeAndBack;
+        setModalState(initModelState);
+        if(isCloseAndBack){
+            goHomeScreen();
+        }
+    };
     useEffect(() => {
-        console.log(props.route.params.id);
         let id = props.route.params.id;
         axios.get(baseUrl + id)
             .then((res: any) => {
@@ -30,9 +42,39 @@ const ProfileScreen: React.FC<ProfileScreenProps> = (props) => {
                 });
             })
             .catch((err: any) => {
-                console.log(err);
+                setModalState({
+                    message: '[Erro na consulta]: ' + err.message,
+                    modalIsOpen: true,
+                    closeAndBack: true
+                });
             });
     }, [props, setForm]);
+
+    const getAndGoListScreen = useCallback((data: string, title: string) => {
+        const repos = getUrl(title);
+        var field: string = title === ScreenList.REPOS ? 'name' : 'login';
+        axios.get(baseUrl + data + '/' + repos)
+            .then((res: any) => {
+                var data = res.data;
+                let lista = getList(data, field);
+                if(lista.length === 0){
+                    setModalState({
+                        message: 'Não há uma ' + title + ' disponível!',
+                        modalIsOpen: true,
+                        closeAndBack: false
+                    });
+                }else{
+                    goListScreen(lista, title);
+                }
+            })
+            .catch((err: any) => {
+                setModalState({
+                    message: '[Erro ao abrir a lista]: ' + err.message,
+                    modalIsOpen: true,
+                    closeAndBack: false
+                });
+            });
+    }, [setForm]);
 
     const getList = (list: Array<any>, field: string) => {
         let arraylist: Array<List> = [];
@@ -60,20 +102,6 @@ const ProfileScreen: React.FC<ProfileScreenProps> = (props) => {
                 return '';
         }
     }
-    const getAndGoListScreen = useCallback((data: string, title: string) => {
-        const repos = getUrl(title);
-        var field = title === ScreenList.REPOS ? 'name' : 'login';
-        console.log(field);
-        axios.get(baseUrl + data + '/' + repos)
-            .then((res: any) => {
-                var data = res.data;
-                let lista = getList(data, field);
-                goListScreen(lista, title);
-            })
-            .catch((err: any) => {
-                console.log(err);
-            });
-    }, [setForm]);
 
     return (
         <SafeAreaView style={styles.container}>
@@ -170,6 +198,11 @@ const ProfileScreen: React.FC<ProfileScreenProps> = (props) => {
                     <Text style={[styles.textMenu]}>Resetar</Text>
                 </TouchableOpacity>
             </View>
+            <BaseModal
+                message={modalState.message}
+                modalIsOpen={modalState.modalIsOpen}
+                onClose={handlerModal}
+            />
         </SafeAreaView>
     );
 }
